@@ -28,6 +28,10 @@ import random
 import numpy as np
 import pandas as pd
 
+from keras import Input, Model
+from keras.layers import Dense, Convolution3D, Flatten
+
+
 try:
     data_dir = Path(__file__).resolve().parent.parent.joinpath("data/")
 except NameError:
@@ -61,6 +65,7 @@ random.seed(0)
 n_sample = min(len(control_list), len(heme_list),
                len(nucleotide_list), len(steroid_list))
 
+# TODO: Think about naming ?
 small_control_list = random.sample(control_list, n_sample)
 small_heme_list = random.sample(heme_list, n_sample)
 small_nucleotide_list = random.sample(nucleotide_list, n_sample)
@@ -89,10 +94,34 @@ for filename in prot_list:
 #        print("Unrecognized file")
         pass
 
+x_redim = [np.squeeze(arr) for arr in x]
+x_array = np.stack(x_redim) 
+
 # control, heme, nucleotide, steroid
 one_hot_y = pd.get_dummies(pd.Series(y)).values
 
+def my_model():
+    inputs = Input(shape=(14, 32, 32, 32))
+    conv_1 = Convolution3D(
+            input_shape=(14,32,32,32),
+            filters=64,
+            kernel_size=5,
+            padding='same',
+            activation="relu",
+            data_format='channels_first',
+        )(inputs)
+    flat_1 = Flatten()(conv_1)
+    output = Dense(4, activation="softmax")(flat_1)
+    model = Model(inputs=inputs, outputs=output)
 
+    print(model.summary())
+    model.compile(optimizer="adam",
+                  loss="categorical_crossentropy",
+                  metrics=["accuracy"])
+    return model
+
+model = my_model()
+model.fit(x_array, one_hot_y, batch_size=20, epochs=20)
 #np.unique(x_train[0])
 
 # =============================================================================
@@ -101,7 +130,7 @@ one_hot_y = pd.get_dummies(pd.Series(y)).values
 
 # See how data changed
 # d = c.reshape(32,32,32,14)
-# np.squeeze
+# np.squeeze + vstack
 
 tmp = np.load(prot_list[0])
 tmp_shp = tmp.reshape(14,32,32,32)
