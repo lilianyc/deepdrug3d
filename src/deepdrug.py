@@ -23,9 +23,16 @@ took representative sites with TC
 """
 
 from pathlib import Path
-import numpy as np
 
-data_dir = Path(__name__).resolve().parent.parent.joinpath("data/")
+import numpy as np
+import pandas as pd
+
+try:
+    data_dir = Path(__file__).resolve().parent.parent.joinpath("data/")
+except NameError:
+    data_dir = Path(__name__).resolve().parent.parent.joinpath("data/")
+
+
 NB_PROT = 10
 
 # Raise error if deepdrug directory not found.
@@ -48,6 +55,23 @@ with open(data_dir.joinpath("control.list"), "r") as file1, \
     steroid_list = [filename.strip() for filename in file4.readlines()]
 
 # TODO: Combine the class information from the files to the list.
+# !!!: Not resistant to reordering/index changes.
+y = []
+for filename in [file.stem for file in prot_list]:
+    if filename in control_list:
+        y.append("control")
+    elif filename in heme_list:
+        y.append("heme")
+    elif filename in nucleotide_list:
+        y.append("nucleotide")
+    elif filename in steroid_list:
+        y.append("steroid")
+    else:
+        print("Unrecognized file")
+
+# control, heme, nucleotide, steroid
+one_hot_y = pd.get_dummies(pd.Series(y)).values
+
 
 # list(Path(".").glob("../data/deepdrug3d_voxel_data/[!._]*.npy"))
 x_train = [np.load(file) for file in prot_list[:NB_PROT]]
@@ -72,3 +96,5 @@ tmp_squ.shape
 (tmp_shp == tmp_squ).all()
 
 # see reshape vs move axis
+
+# dict to conv, (), mask ?
