@@ -23,6 +23,7 @@ took representative sites with TC
 """
 
 from pathlib import Path
+import random
 
 import numpy as np
 import pandas as pd
@@ -54,20 +55,32 @@ with open(data_dir.joinpath("control.list"), "r") as file1, \
     nucleotide_list = [filename.strip() for filename in file3.readlines()]
     steroid_list = [filename.strip() for filename in file4.readlines()]
 
-# TODO: Combine the class information from the files to the list.
+# Have balanced samples for training.
+random.seed(0)
+n_sample = min(len(control_list), len(heme_list),
+               len(nucleotide_list), len(steroid_list))
+
+small_control_list = random.sample(control_list, n_sample)
+small_heme_list = random.sample(heme_list, n_sample)
+small_nucleotide_list = random.sample(nucleotide_list, n_sample)
+small_steroid_list = random.sample(steroid_list, n_sample)
+
+
+# TODO: Combine the class information from the files to the list in a func.
 # !!!: Not resistant to reordering/index changes.
 y = []
 for filename in [file.stem for file in prot_list]:
-    if filename in control_list:
+    if filename in small_control_list:
         y.append("control")
-    elif filename in heme_list:
+    elif filename in small_heme_list:
         y.append("heme")
-    elif filename in nucleotide_list:
+    elif filename in small_nucleotide_list:
         y.append("nucleotide")
-    elif filename in steroid_list:
+    elif filename in small_steroid_list:
         y.append("steroid")
     else:
-        print("Unrecognized file")
+#        print("Unrecognized file")
+        pass
 
 # control, heme, nucleotide, steroid
 one_hot_y = pd.get_dummies(pd.Series(y)).values
