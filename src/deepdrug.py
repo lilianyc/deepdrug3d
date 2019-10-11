@@ -41,6 +41,7 @@ assert data_dir.joinpath("deepdrug3d_voxel_data/").is_dir(), \
        "No directory deepdrug3d_voxel_data/ found in data/"
 
 # numpy loading directly is horrendously slow.
+# list(Path(".").glob("../data/deepdrug3d_voxel_data/[!._]*.npy"))
 prot_list = [file for file in data_dir.glob("deepdrug3d_voxel_data/*.npy")
              if not file.name.startswith("._")]
 
@@ -68,16 +69,22 @@ small_steroid_list = random.sample(steroid_list, n_sample)
 
 # TODO: Combine the class information from the files to the list in a func.
 # !!!: Not resistant to reordering/index changes.
+x = []
 y = []
-for filename in [file.stem for file in prot_list]:
-    if filename in small_control_list:
+# Ugly, use a dict ?
+for filename in prot_list:
+    if filename.stem in small_control_list:
         y.append("control")
-    elif filename in small_heme_list:
+        x.append(np.load(filename))
+    elif filename.stem in small_heme_list:
         y.append("heme")
-    elif filename in small_nucleotide_list:
+        x.append(np.load(filename))
+    elif filename.stem in small_nucleotide_list:
         y.append("nucleotide")
-    elif filename in small_steroid_list:
+        x.append(np.load(filename))
+    elif filename.stem in small_steroid_list:
         y.append("steroid")
+        x.append(np.load(filename))
     else:
 #        print("Unrecognized file")
         pass
@@ -86,10 +93,7 @@ for filename in [file.stem for file in prot_list]:
 one_hot_y = pd.get_dummies(pd.Series(y)).values
 
 
-# list(Path(".").glob("../data/deepdrug3d_voxel_data/[!._]*.npy"))
-x_train = [np.load(file) for file in prot_list[:NB_PROT]]
-
-np.unique(x_train[0])
+#np.unique(x_train[0])
 
 # =============================================================================
 # See shape
