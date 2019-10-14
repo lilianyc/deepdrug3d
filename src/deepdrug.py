@@ -37,9 +37,6 @@ try:
 except NameError:
     data_dir = Path(__name__).resolve().parent.parent.joinpath("data/")
 
-
-NB_PROT = 10
-
 # Raise error if deepdrug directory not found.
 assert data_dir.joinpath("deepdrug3d_voxel_data/").is_dir(), \
        "No directory deepdrug3d_voxel_data/ found in data/"
@@ -94,19 +91,26 @@ for filename in prot_list:
 #        print("Unrecognized file")
         pass
 
+# Shuffle the list before converting to array.
+#!!!: Redim the y too then !
+#random.shuffle(x)
+
 x_redim = [np.squeeze(arr) for arr in x]
-x_array = np.stack(x_redim) 
+x_array = np.stack(x_redim)
+
+
 
 # control, heme, nucleotide, steroid
 one_hot_y = pd.get_dummies(pd.Series(y)).values
+
 
 def my_model():
     inputs = Input(shape=(14, 32, 32, 32))
     conv_1 = Convolution3D(
             input_shape=(14,32,32,32),
-            filters=64,
+            filters=4,
             kernel_size=5,
-            padding='same',
+            padding='valid',  # It seems using padding same causes problems
             activation="relu",
             data_format='channels_first',
         )(inputs)
@@ -120,13 +124,110 @@ def my_model():
                   metrics=["accuracy"])
     return model
 
-model = my_model()
-model.fit(x_array, one_hot_y, batch_size=20, epochs=20)
+
+from keras.optimizers import Adam
+def test_model():
+    inputs = Input(shape=(14, 32, 32, 32))
+    conv_1 = Convolution3D(
+            input_shape=(14,32,32,32),
+            filters=4,
+            kernel_size=5,
+            padding='same',  # It seems using padding same causes problems
+            activation="relu",
+            kernel_initializer="he_normal",
+            data_format='channels_first',
+        )(inputs)
+#    conv_2 = Convolution3D(
+#            filters=64,
+#            kernel_size=3,
+#            padding='valid',     # Padding method
+#            data_format='channels_first',
+#        )(conv_1)
+    maxp_1 = MaxPooling3D(
+            pool_size=(2,2,2),
+            strides=None,
+            padding='valid',    # Padding method
+            data_format='channels_first'
+        )(conv_1)
+    flat_1 = Flatten()(maxp_1)
+    output = Dense(4, activation="softmax")(flat_1)
+    model = Model(inputs=inputs, outputs=output)
+
+    print(model.summary())
+    adam = Adam(lr=0.1)
+
+    model.compile(optimizer=adam,
+                  loss="categorical_crossentropy",
+                  metrics=["accuracy"])
+    return model
+
+
+model = test_model()
+
+
+np.random.seed(0)
+model.fit(x_array[:10], one_hot_y[:10], batch_size=20, epochs=30, validation_split=0.2)
+
+
+np.random.seed(0)
+model.fit(x_array, one_hot_y, batch_size=20, epochs=20, validation_split=0.2)
+
+model.predict(x_array, one_hot_y)
 #np.unique(x_train[0])
 
 # =============================================================================
 # See shape
 # =============================================================================
+
+from keras.models import Sequential
+from keras.layers import LeakyReLU, Dropout, MaxPooling3D, Activation
+
+
+def build():
+        model = Sequential()
+        # Conv layer 1
+        model.add(Convolution3D(
+            input_shape = (14,32,32,32),
+            filters=64,
+            kernel_size=5,
+            padding='valid',     # Padding method
+            data_format='channels_first',
+        ))
+        model.add(LeakyReLU(alpha = 0.1))
+        # Dropout 1
+        model.add(Dropout(0.2))
+        # Conv layer 2
+        model.add(Convolution3D(
+            filters=64,
+            kernel_size=3,
+            padding='valid',     # Padding method
+            data_format='channels_first',
+        ))
+        model.add(LeakyReLU(alpha = 0.1))
+        # Maxpooling 1
+        model.add(MaxPooling3D(
+            pool_size=(2,2,2),
+            strides=None,
+            padding='valid',    # Padding method
+            data_format='channels_first'
+        ))
+        # Dropout 2
+        model.add(Dropout(0.4))
+        # FC 1
+        model.add(Flatten())
+        model.add(Dense(128)) # TODO changed to 64 for the CAM
+        model.add(LeakyReLU(alpha = 0.1))
+        # Dropout 3
+        model.add(Dropout(0.4))
+        # Fully connected layer 2 to shape (2) for 2 classes
+        model.add(Dense(4))
+        model.add(Activation('softmax'))
+
+        model.compile(optimizer="adam",
+                  loss="categorical_crossentropy",
+                  metrics=["accuracy"])
+        return model
+model = build()
 
 # See how data changed
 # d = c.reshape(32,32,32,14)
