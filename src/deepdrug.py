@@ -96,46 +96,48 @@ for filename in prot_list:
 #random.shuffle(x)
 
 x_redim = [np.squeeze(arr) for arr in x]
-x_array = np.stack(x_redim)
+x_array = np.stack(x_redim)  #The problem does not seem to come from here
+# However, can convert list directly to array
 
-
+new_x_array = np.moveaxis(x_array, 1, -1)
 
 # control, heme, nucleotide, steroid
 one_hot_y = pd.get_dummies(pd.Series(y)).values
 
 
-def my_model():
-    inputs = Input(shape=(14, 32, 32, 32))
-    conv_1 = Convolution3D(
-            input_shape=(14,32,32,32),
-            filters=4,
-            kernel_size=5,
-            padding='valid',  # It seems using padding same causes problems
-            activation="relu",
-            data_format='channels_first',
-        )(inputs)
-    flat_1 = Flatten()(conv_1)
-    output = Dense(4, activation="softmax")(flat_1)
-    model = Model(inputs=inputs, outputs=output)
-
-    print(model.summary())
-    model.compile(optimizer="adam",
-                  loss="categorical_crossentropy",
-                  metrics=["accuracy"])
-    return model
+#def my_model():
+#    inputs = Input(shape=(14, 32, 32, 32))
+#    conv_1 = Convolution3D(
+#            input_shape=(14,32,32,32),
+#            filters=4,
+#            kernel_size=5,
+#            padding='valid',  # It seems using padding same causes problems
+#            activation="relu",
+#            data_format='channels_first',
+#        )(inputs)
+#    flat_1 = Flatten()(conv_1)
+#    output = Dense(4, activation="softmax")(flat_1)
+#    model = Model(inputs=inputs, outputs=output)
+#
+#    print(model.summary())
+#    model.compile(optimizer="adam",
+#                  loss="categorical_crossentropy",
+#                  metrics=["accuracy"])
+#    return model
 
 
 from keras.optimizers import Adam
+from keras.layers import MaxPooling3D
 def test_model():
-    inputs = Input(shape=(14, 32, 32, 32))
+    inputs = Input(shape=(32, 32, 32, 14))
     conv_1 = Convolution3D(
-            input_shape=(14,32,32,32),
-            filters=4,
+            input_shape=(32,32,32, 14),
+            filters=64,
             kernel_size=5,
             padding='same',  # It seems using padding same causes problems
             activation="relu",
             kernel_initializer="he_normal",
-            data_format='channels_first',
+#            data_format='channels_first',
         )(inputs)
 #    conv_2 = Convolution3D(
 #            filters=64,
@@ -147,7 +149,7 @@ def test_model():
             pool_size=(2,2,2),
             strides=None,
             padding='valid',    # Padding method
-            data_format='channels_first'
+#            data_format='channels_first'
         )(conv_1)
     flat_1 = Flatten()(maxp_1)
     output = Dense(4, activation="softmax")(flat_1)
@@ -163,11 +165,12 @@ def test_model():
 
 
 model = test_model()
+model = my_model7()
 
 
 np.random.seed(0)
-model.fit(x_array[:10], one_hot_y[:10], batch_size=20, epochs=30, validation_split=0.2)
-
+model.fit(new_x_array, one_hot_y, batch_size=32, epochs=30, validation_split=0.2)
+#model.fit(np.array(x_redim), one_hot_y, batch_size=32, epochs=30, validation_split=0.2)
 
 np.random.seed(0)
 model.fit(x_array, one_hot_y, batch_size=20, epochs=20, validation_split=0.2)
@@ -179,8 +182,48 @@ model.predict(x_array, one_hot_y)
 # See shape
 # =============================================================================
 
+
 from keras.models import Sequential
 from keras.layers import LeakyReLU, Dropout, MaxPooling3D, Activation
+
+
+from keras.layers import add, AveragePooling3D, Activation
+def residual_module(lay_i, n_filters):
+    # check if the number of filters needs to be increased, assumes
+    # channels last format.
+    if lay_i.shape[-1] != n_filters:
+        lay_i = Convolution3D(n_filters, (1), padding="same", activation="relu",
+                       kernel_initializer="he_normal", data_format='channels_first')(lay_i)
+    save = lay_i
+    conv_1 = Convolution3D(n_filters, (3), padding="same", activation="relu",
+                    kernel_initializer="he_normal", data_format='channels_first')(lay_i)
+    conv_2 = Convolution3D(n_filters, (3), padding="same", activation="linear",
+                    kernel_initializer="he_normal", data_format='channels_first')(conv_1)
+    conc_1 = add([conv_2, save])
+    output = Activation("relu")(conc_1)
+
+    return output
+
+def my_model7():
+    n_residual = 2
+    print("Simple residual network with {} modules".format(n_residual))
+    inputs = Input(shape=(32, 32, 32, 14))
+    residual_i = inputs
+    for _ in range(n_residual):
+        residual_i = residual_module(residual_i, 60)
+
+    # !! Padding to not lose dimension.
+    gavg_1 = AveragePooling3D((2, 2, 2), strides=(1), padding="same")(residual_i)
+    flat_1 = Flatten()(gavg_1)
+    output = Dense(4, activation="softmax")(flat_1)
+
+    model = Model(inputs=inputs, outputs=output)
+
+    print(model.summary())
+
+    model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
+    return model
+
 
 
 def build():
