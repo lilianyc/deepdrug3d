@@ -20,6 +20,8 @@ TOUGH C1 dataset
 nucleotide, heme and steroid
 
 took representative sites with TC
+
+!!!: it seems the steroid might not be considered as a class
 """
 
 from pathlib import Path
@@ -84,12 +86,53 @@ for filename in prot_list:
     elif filename.stem in small_nucleotide_list:
         y.append("nucleotide")
         x.append(np.load(filename))
-    elif filename.stem in small_steroid_list:
-        y.append("steroid")
-        x.append(np.load(filename))
+#    elif filename.stem in small_steroid_list:
+#        y.append("steroid")
+#        x.append(np.load(filename))
     else:
 #        print("Unrecognized file")
         pass
+
+# =============================================================================
+# Alternative method to get x.
+# =============================================================================
+# Inspired by train.py in the original deepdrug repo.
+from keras.utils import np_utils
+import os
+
+voxel_folder = str(data_dir.joinpath("deepdrug3d_voxel_data/"))
+
+#atps = [filename.stem for filename in small_nucleotide_list]
+#hemes = [filename.stem for filename in small_heme_list]
+#controls = [filename.stem for filename in small_control_list]
+
+L = len(small_nucleotide_list) + len(small_heme_list) #+ len(small_control_list)
+voxel = np.zeros(shape = (L, 14, 32, 32, 32),
+        dtype = np.float64)
+label = np.zeros(shape = (L,), dtype = int)
+cnt = 0
+print('...Loading the data')
+
+for filename in os.listdir(voxel_folder):
+    protein_name = filename[0:-4]
+    full_path = voxel_folder + '/' + filename
+    temp = np.load(full_path)
+    voxel[cnt,:] = temp
+    if protein_name in small_nucleotide_list:
+        label[cnt] = 0
+    elif protein_name in small_heme_list:
+        label[cnt] = 1
+#    elif protein_name in small_control_list:
+#        label[cnt] = 2
+    else:
+        print(protein_name)
+        break
+    cnt += 1
+    
+y = np_utils.to_categorical(label, num_classes=3)
+model = my_model()
+model.fit(voxel, y, epochs=20, batch_size=20, validation_split=0.2)
+
 
 # Shuffle the list before converting to array.
 #!!!: Redim the y too then !
@@ -116,7 +159,7 @@ one_hot_y = pd.get_dummies(pd.Series(y)).values
 #            data_format='channels_first',
 #        )(inputs)
 #    flat_1 = Flatten()(conv_1)
-#    output = Dense(4, activation="softmax")(flat_1)
+#    output = Dense(3, activation="softmax")(flat_1)
 #    model = Model(inputs=inputs, outputs=output)
 #
 #    print(model.summary())
@@ -152,7 +195,7 @@ def test_model():
 #            data_format='channels_first'
         )(conv_1)
     flat_1 = Flatten()(maxp_1)
-    output = Dense(4, activation="softmax")(flat_1)
+    output = Dense(3, activation="softmax")(flat_1)
     model = Model(inputs=inputs, outputs=output)
 
     print(model.summary())
@@ -169,7 +212,7 @@ model = my_model7()
 
 
 np.random.seed(0)
-model.fit(new_x_array, one_hot_y, batch_size=32, epochs=30, validation_split=0.2)
+model.fit(new_x_array, one_hot_y, batch_size=20, epochs=20, validation_split=0.2)
 #model.fit(np.array(x_redim), one_hot_y, batch_size=32, epochs=30, validation_split=0.2)
 
 np.random.seed(0)
@@ -210,12 +253,12 @@ def my_model7():
     inputs = Input(shape=(32, 32, 32, 14))
     residual_i = inputs
     for _ in range(n_residual):
-        residual_i = residual_module(residual_i, 60)
+        residual_i = residual_module(residual_i, 20)
 
     # !! Padding to not lose dimension.
     gavg_1 = AveragePooling3D((2, 2, 2), strides=(1), padding="same")(residual_i)
     flat_1 = Flatten()(gavg_1)
-    output = Dense(4, activation="softmax")(flat_1)
+    output = Dense(3, activation="softmax")(flat_1)
 
     model = Model(inputs=inputs, outputs=output)
 
@@ -263,7 +306,7 @@ def build():
         # Dropout 3
         model.add(Dropout(0.4))
         # Fully connected layer 2 to shape (2) for 2 classes
-        model.add(Dense(4))
+        model.add(Dense(3))
         model.add(Activation('softmax'))
 
         model.compile(optimizer="adam",
