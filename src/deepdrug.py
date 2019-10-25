@@ -30,9 +30,16 @@ import random
 import numpy as np
 import pandas as pd
 
+
 from keras import Input, Model
 from keras.layers import Dense, Convolution3D, Flatten
 
+#import keras
+#from importlib import reload
+#import os; os.environ['KERAS_BACKEND'] = 'theano_backend';reload(keras.backend)
+# =============================================================================
+# 
+# =============================================================================
 
 try:
     data_dir = Path(__file__).resolve().parent.parent.joinpath("data/")
@@ -73,9 +80,9 @@ n_sample = min(len(control_list), len(heme_list),
                len(nucleotide_list), len(steroid_list))
 
 # TODO: Think about naming ?
-small_control_list = random.sample(control_list, n_sample)
-small_heme_list = random.sample(heme_list, n_sample)
-small_nucleotide_list = random.sample(nucleotide_list, n_sample)
+small_control_list = random.sample(control_list, 100)
+small_heme_list = random.sample(heme_list, 10)
+small_nucleotide_list = random.sample(nucleotide_list, 90)
 small_steroid_list = random.sample(steroid_list, n_sample)
 
 
@@ -110,34 +117,35 @@ import os
 
 voxel_folder = str(data_dir.joinpath("deepdrug3d_voxel_data/"))
 
-atps = random.sample(nucleotide_list, 100)
-hemes = random.sample(heme_list, 100)
-#controls = [filename.stem for filename in small_control_list]
+atps = random.sample(nucleotide_list, 50)
+hemes = random.sample(heme_list, 50)
+controls = random.sample(control_list, 50)
 
-L = len(atps) + len(hemes) #+ len(small_control_list)
+L = len(atps) + len(hemes) + len(controls)
 voxel = np.zeros(shape = (L, 14, 32, 32, 32),
         dtype = np.float64)
 label = np.zeros(shape = (L,), dtype = int)
 cnt = 0
 print('...Loading the data')
 
-for filename in os.listdir(voxel_folder):
-    protein_name = filename[0:-4]
-    full_path = voxel_folder + '/' + filename
-    temp = np.load(full_path)
-    voxel[cnt,:] = temp
+for filename in prot_list:
+    protein_name = filename.stem
+#    full_path = voxel_folder + '/' + filename
+    if protein_name in atps + hemes +controls:
+        temp = np.load(filename)
+        voxel[cnt,:] = temp
     if protein_name in atps:
         label[cnt] = 0
     elif protein_name in hemes:
         label[cnt] = 1
-#    elif protein_name in small_control_list:
-#        label[cnt] = 2
+    elif protein_name in controls:
+        label[cnt] = 2
     else:
-        print(protein_name)
-        break
+#        print(protein_name)
+        continue
     cnt += 1
     
-y = np_utils.to_categorical(label, num_classes=2)
+y = np_utils.to_categorical(label, num_classes=3)
 model = my_model()
 model.fit(voxel, y, epochs=20, batch_size=20, validation_split=0.2)
 pred = model.predict(voxel)
@@ -161,18 +169,19 @@ one_hot_y = pd.get_dummies(pd.Series(y)).values
 
 
 # Channel first simple model.
+# It seems using too much filters in conv_1 or using another conv bugs.
 def my_model():
     inputs = Input(shape=(14, 32, 32, 32))
     conv_1 = Convolution3D(
             input_shape=(14,32,32,32),
-            filters=12,
+            filters=64,
             kernel_size=5,
             padding='valid',  # It seems using padding same causes problems
             activation="relu",
             data_format='channels_first',
         )(inputs)
 #    conv_2 = Convolution3D(
-#            filters=6,
+#            filters=32,
 #            kernel_size=3,
 #            padding='valid',     # Padding method
 #            data_format='channels_first',
@@ -182,7 +191,7 @@ def my_model():
     model = Model(inputs=inputs, outputs=output)
 
     print(model.summary())
-    model.compile(optimizer="sgd",
+    model.compile(optimizer="rmsprop",
                   loss="categorical_crossentropy",
                   metrics=["accuracy"])
     return model
@@ -227,7 +236,7 @@ def test_model():
 
 
 model = test_model()
-model = my_model()
+
 
 
 np.random.seed(0)
@@ -239,6 +248,7 @@ pred = model.predict(new_x_array)
 
 # Channel first.
 np.random.seed(0)
+model = my_model()
 model.fit(x_array, one_hot_y, batch_size=20, epochs=20, validation_split=0.2)
 
 model.predict(x_array)
