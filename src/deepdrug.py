@@ -165,12 +165,18 @@ def my_model():
     inputs = Input(shape=(14, 32, 32, 32))
     conv_1 = Convolution3D(
             input_shape=(14,32,32,32),
-            filters=4,
+            filters=12,
             kernel_size=5,
             padding='valid',  # It seems using padding same causes problems
             activation="relu",
             data_format='channels_first',
         )(inputs)
+#    conv_2 = Convolution3D(
+#            filters=6,
+#            kernel_size=3,
+#            padding='valid',     # Padding method
+#            data_format='channels_first',
+#        )(conv_1)
     flat_1 = Flatten()(conv_1)
     output = Dense(3, activation="softmax")(flat_1)
     model = Model(inputs=inputs, outputs=output)
@@ -212,7 +218,7 @@ def test_model():
     model = Model(inputs=inputs, outputs=output)
 
     print(model.summary())
-#    adam = Adam(lr=0.1)
+    adam = Adam(lr=0.1)
 
     model.compile(optimizer=adam,
                   loss="categorical_crossentropy",
