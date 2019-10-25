@@ -43,6 +43,10 @@ except NameError:
 assert data_dir.joinpath("deepdrug3d_voxel_data/").is_dir(), \
        "No directory deepdrug3d_voxel_data/ found in data/"
 
+# =============================================================================
+# Loading the data
+# =============================================================================
+
 # numpy loading directly is horrendously slow.
 # list(Path(".").glob("../data/deepdrug3d_voxel_data/[!._]*.npy"))
 prot_list = [file for file in data_dir.glob("deepdrug3d_voxel_data/*.npy")
@@ -58,6 +62,10 @@ with open(data_dir.joinpath("control.list"), "r") as file1, \
     heme_list = [filename.strip() for filename in file2.readlines()]
     nucleotide_list = [filename.strip() for filename in file3.readlines()]
     steroid_list = [filename.strip() for filename in file4.readlines()]
+
+# =============================================================================
+# Create x and y.
+# =============================================================================
 
 # Have balanced samples for training.
 random.seed(0)
@@ -102,11 +110,11 @@ import os
 
 voxel_folder = str(data_dir.joinpath("deepdrug3d_voxel_data/"))
 
-#atps = [filename.stem for filename in small_nucleotide_list]
-#hemes = [filename.stem for filename in small_heme_list]
+atps = random.sample(nucleotide_list, 100)
+hemes = random.sample(heme_list, 100)
 #controls = [filename.stem for filename in small_control_list]
 
-L = len(small_nucleotide_list) + len(small_heme_list) #+ len(small_control_list)
+L = len(atps) + len(hemes) #+ len(small_control_list)
 voxel = np.zeros(shape = (L, 14, 32, 32, 32),
         dtype = np.float64)
 label = np.zeros(shape = (L,), dtype = int)
@@ -118,9 +126,9 @@ for filename in os.listdir(voxel_folder):
     full_path = voxel_folder + '/' + filename
     temp = np.load(full_path)
     voxel[cnt,:] = temp
-    if protein_name in small_nucleotide_list:
+    if protein_name in atps:
         label[cnt] = 0
-    elif protein_name in small_heme_list:
+    elif protein_name in hemes:
         label[cnt] = 1
 #    elif protein_name in small_control_list:
 #        label[cnt] = 2
@@ -129,10 +137,14 @@ for filename in os.listdir(voxel_folder):
         break
     cnt += 1
     
-y = np_utils.to_categorical(label, num_classes=3)
+y = np_utils.to_categorical(label, num_classes=2)
 model = my_model()
 model.fit(voxel, y, epochs=20, batch_size=20, validation_split=0.2)
+pred = model.predict(voxel)
 
+# =============================================================================
+# END
+# =============================================================================
 
 # Shuffle the list before converting to array.
 #!!!: Redim the y too then !
@@ -148,25 +160,26 @@ new_x_array = np.moveaxis(x_array, 1, -1)
 one_hot_y = pd.get_dummies(pd.Series(y)).values
 
 
-#def my_model():
-#    inputs = Input(shape=(14, 32, 32, 32))
-#    conv_1 = Convolution3D(
-#            input_shape=(14,32,32,32),
-#            filters=4,
-#            kernel_size=5,
-#            padding='valid',  # It seems using padding same causes problems
-#            activation="relu",
-#            data_format='channels_first',
-#        )(inputs)
-#    flat_1 = Flatten()(conv_1)
-#    output = Dense(3, activation="softmax")(flat_1)
-#    model = Model(inputs=inputs, outputs=output)
-#
-#    print(model.summary())
-#    model.compile(optimizer="adam",
-#                  loss="categorical_crossentropy",
-#                  metrics=["accuracy"])
-#    return model
+# Channel first simple model.
+def my_model():
+    inputs = Input(shape=(14, 32, 32, 32))
+    conv_1 = Convolution3D(
+            input_shape=(14,32,32,32),
+            filters=4,
+            kernel_size=5,
+            padding='valid',  # It seems using padding same causes problems
+            activation="relu",
+            data_format='channels_first',
+        )(inputs)
+    flat_1 = Flatten()(conv_1)
+    output = Dense(3, activation="softmax")(flat_1)
+    model = Model(inputs=inputs, outputs=output)
+
+    print(model.summary())
+    model.compile(optimizer="sgd",
+                  loss="categorical_crossentropy",
+                  metrics=["accuracy"])
+    return model
 
 
 from keras.optimizers import Adam
@@ -199,7 +212,7 @@ def test_model():
     model = Model(inputs=inputs, outputs=output)
 
     print(model.summary())
-    adam = Adam(lr=0.1)
+#    adam = Adam(lr=0.1)
 
     model.compile(optimizer=adam,
                   loss="categorical_crossentropy",
@@ -208,17 +221,21 @@ def test_model():
 
 
 model = test_model()
-model = my_model7()
+model = my_model()
 
 
 np.random.seed(0)
 model.fit(new_x_array, one_hot_y, batch_size=20, epochs=20, validation_split=0.2)
 #model.fit(np.array(x_redim), one_hot_y, batch_size=32, epochs=30, validation_split=0.2)
+pred = model.predict(new_x_array)
+# It seems the model only predicts the second column
+[ind_pred for ind_pred in pred if (ind_pred != np.array([0,1,0])).all()]
 
+# Channel first.
 np.random.seed(0)
 model.fit(x_array, one_hot_y, batch_size=20, epochs=20, validation_split=0.2)
 
-model.predict(x_array, one_hot_y)
+model.predict(x_array)
 #np.unique(x_train[0])
 
 # =============================================================================
