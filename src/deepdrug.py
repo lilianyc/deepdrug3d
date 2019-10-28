@@ -75,14 +75,14 @@ with open(data_dir.joinpath("control.list"), "r") as file1, \
 # =============================================================================
 
 # Have balanced samples for training.
-random.seed(0)
+random.seed(2)
 n_sample = min(len(control_list), len(heme_list),
                len(nucleotide_list), len(steroid_list))
 
 # TODO: Think about naming ?
-small_control_list = random.sample(control_list, 100+random.randint(0, 15))
-small_heme_list = random.sample(heme_list, 100+random.randint(0, 15))
-small_nucleotide_list = random.sample(nucleotide_list, 100+random.randint(0, 15))
+small_control_list = random.sample(control_list, 300)
+small_heme_list = random.sample(heme_list, 300)
+small_nucleotide_list = random.sample(nucleotide_list, 300)
 small_steroid_list = random.sample(steroid_list, n_sample)
 
 
@@ -260,6 +260,7 @@ model.fit(x_array, one_hot_y, batch_size=20, epochs=20, validation_split=0.2)
 model.fit(np.array(x_redim), one_hot_y, batch_size=20, epochs=20, validation_split=0.2)
 
 model.predict(x_array)
+model.predict(np.array(x_redim))
 #np.unique(x_train[0])
 
 # =============================================================================
