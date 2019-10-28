@@ -80,9 +80,9 @@ n_sample = min(len(control_list), len(heme_list),
                len(nucleotide_list), len(steroid_list))
 
 # TODO: Think about naming ?
-small_control_list = random.sample(control_list, 100)
-small_heme_list = random.sample(heme_list, 10)
-small_nucleotide_list = random.sample(nucleotide_list, 90)
+small_control_list = random.sample(control_list, 100+random.randint(0, 15))
+small_heme_list = random.sample(heme_list, 100+random.randint(0, 15))
+small_nucleotide_list = random.sample(nucleotide_list, 100+random.randint(0, 15))
 small_steroid_list = random.sample(steroid_list, n_sample)
 
 
@@ -180,13 +180,20 @@ def my_model():
             activation="relu",
             data_format='channels_first',
         )(inputs)
-#    conv_2 = Convolution3D(
-#            filters=32,
-#            kernel_size=3,
-#            padding='valid',     # Padding method
-#            data_format='channels_first',
-#        )(conv_1)
-    flat_1 = Flatten()(conv_1)
+    conv_2 = Convolution3D(
+            filters=32,
+            kernel_size=3,
+            padding='valid',     # Padding method
+            data_format='channels_first',
+        )(conv_1)
+    maxp3d_1 = MaxPooling3D(
+            pool_size=(2,2,2),
+            strides=None,
+            padding='valid',    # Padding method
+            data_format='channels_first'
+        )(conv_2)
+    drop_1 = Dropout(0.4)(maxp3d_1)
+    flat_1 = Flatten()(drop_1)
     output = Dense(3, activation="softmax")(flat_1)
     model = Model(inputs=inputs, outputs=output)
 
@@ -250,6 +257,7 @@ pred = model.predict(new_x_array)
 np.random.seed(0)
 model = my_model()
 model.fit(x_array, one_hot_y, batch_size=20, epochs=20, validation_split=0.2)
+model.fit(np.array(x_redim), one_hot_y, batch_size=20, epochs=20, validation_split=0.2)
 
 model.predict(x_array)
 #np.unique(x_train[0])
