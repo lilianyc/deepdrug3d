@@ -14,7 +14,6 @@ performance, and 50 epochs are sufficient to reach the convergence. A 5-fold cro
 
 see CAM for significant binding regions ?
 
-TOUGH C1 dataset
 
 # Pockets bind
 nucleotide, heme and steroid
@@ -32,7 +31,7 @@ import pandas as pd
 
 
 from keras import Input, Model
-from keras.layers import Dense, Convolution3D, Flatten
+from keras.layers import Dense, Convolution3D, Flatten, Dropout, MaxPooling3D
 
 #import keras
 #from importlib import reload
@@ -80,9 +79,9 @@ n_sample = min(len(control_list), len(heme_list),
                len(nucleotide_list), len(steroid_list))
 
 # TODO: Think about naming ?
-small_control_list = random.sample(control_list, 300)
-small_heme_list = random.sample(heme_list, 300)
-small_nucleotide_list = random.sample(nucleotide_list, 300)
+small_control_list = random.sample(control_list, 150+random.randint(-15,15))
+small_heme_list = random.sample(heme_list, 150+random.randint(-15,15))
+small_nucleotide_list = random.sample(nucleotide_list, 150+random.randint(-15,15))
 small_steroid_list = random.sample(steroid_list, n_sample)
 
 
@@ -90,7 +89,7 @@ small_steroid_list = random.sample(steroid_list, n_sample)
 # !!!: Not resistant to reordering/index changes.
 x = []
 y = []
-# Ugly, use a dict ?
+# Load filenames in samples.
 for filename in prot_list:
     if filename.stem in small_control_list:
         y.append("control")
@@ -105,66 +104,18 @@ for filename in prot_list:
 #        y.append("steroid")
 #        x.append(np.load(filename))
     else:
-#        print("Unrecognized file")
         pass
 
-# =============================================================================
-# Alternative method to get x.
-# =============================================================================
-# Inspired by train.py in the original deepdrug repo.
-from keras.utils import np_utils
-import os
 
-voxel_folder = str(data_dir.joinpath("deepdrug3d_voxel_data/"))
-
-atps = random.sample(nucleotide_list, 50)
-hemes = random.sample(heme_list, 50)
-controls = random.sample(control_list, 50)
-
-L = len(atps) + len(hemes) + len(controls)
-voxel = np.zeros(shape = (L, 14, 32, 32, 32),
-        dtype = np.float64)
-label = np.zeros(shape = (L,), dtype = int)
-cnt = 0
-print('...Loading the data')
-
-for filename in prot_list:
-    protein_name = filename.stem
-#    full_path = voxel_folder + '/' + filename
-    if protein_name in atps + hemes +controls:
-        temp = np.load(filename)
-        voxel[cnt,:] = temp
-    if protein_name in atps:
-        label[cnt] = 0
-    elif protein_name in hemes:
-        label[cnt] = 1
-    elif protein_name in controls:
-        label[cnt] = 2
-    else:
-#        print(protein_name)
-        continue
-    cnt += 1
-    
-y = np_utils.to_categorical(label, num_classes=3)
-model = my_model()
-model.fit(voxel, y, epochs=20, batch_size=20, validation_split=0.2)
-pred = model.predict(voxel)
-
-# =============================================================================
-# END
-# =============================================================================
-
-# Shuffle the list before converting to array.
-#!!!: Redim the y too then !
-#random.shuffle(x)
-
+# Normalize dimension shape to (14, 32, 32, 32).
 x_redim = [np.squeeze(arr) for arr in x]
+# Convert array list to a numpy array, np.array can also fill the job.
 x_array = np.stack(x_redim)  #The problem does not seem to come from here
-# However, can convert list directly to array
 
+# For use without channel_first
 new_x_array = np.moveaxis(x_array, 1, -1)
 
-# control, heme, nucleotide, steroid
+# One hot encode, sorted in alphabetical order: control, heme, nucleotide.
 one_hot_y = pd.get_dummies(pd.Series(y)).values
 
 
@@ -205,7 +156,6 @@ def my_model():
 
 
 from keras.optimizers import Adam
-from keras.layers import MaxPooling3D
 def test_model():
     inputs = Input(shape=(32, 32, 32, 14))
     conv_1 = Convolution3D(
@@ -245,7 +195,7 @@ def test_model():
 model = test_model()
 
 
-
+# Channels moved to last position.
 np.random.seed(0)
 model.fit(new_x_array, one_hot_y, batch_size=20, epochs=20, validation_split=0.2)
 #model.fit(np.array(x_redim), one_hot_y, batch_size=32, epochs=30, validation_split=0.2)
@@ -256,11 +206,48 @@ pred = model.predict(new_x_array)
 # Channel first.
 np.random.seed(0)
 model = my_model()
+np.random.seed(0)
 model.fit(x_array, one_hot_y, batch_size=20, epochs=20, validation_split=0.2)
-model.fit(np.array(x_redim), one_hot_y, batch_size=20, epochs=20, validation_split=0.2)
+history = model.fit(np.array(x_redim), one_hot_y, batch_size=20, epochs=20, validation_split=0.2)
 
 model.predict(x_array)
-model.predict(np.array(x_redim))
+pred = model.predict(np.array(x_redim))
+
+# =============================================================================
+# Visualisation.
+# =============================================================================
+
+from sklearn.metrics import roc_curve, auc
+import matplotlib.pyplot as plt
+
+#roc_curve(one_hot_y[:,0], pred[:,0])
+def plot_roc(pred, y, title=None, col=None):
+    """Plot a ROC curve.
+
+    Inspired by t81_558_class_04_2_multi_class by Jeff Heaton.
+
+    """
+    fpr, tpr, _ = roc_curve(y, pred)
+    roc_auc = auc(fpr, tpr)
+    title = title if title else 'Receiver Operating Characteristic (ROC)'
+
+    plt.figure()
+    plt.plot(fpr, tpr, label='ROC curve (area = %0.2f)' % roc_auc, color=col)
+    plt.plot([0, 1], [0, 1], 'k--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title(title)
+    plt.legend(loc="lower right")
+    plt.show()
+
+# control, heme, nucleotide
+plot_roc(pred[:, 0], one_hot_y[:, 0], "ROC of control")
+plot_roc(pred[:, 1], one_hot_y[:, 1], "ROC of heme", col="green")
+plot_roc(pred[:, 2], one_hot_y[:, 2], "ROC of nucleotide", col="brown")
+
+# Only predicts nucleotide
 #np.unique(x_train[0])
 
 # =============================================================================
@@ -269,7 +256,7 @@ model.predict(np.array(x_redim))
 
 
 from keras.models import Sequential
-from keras.layers import LeakyReLU, Dropout, MaxPooling3D, Activation
+from keras.layers import LeakyReLU, Activation
 
 
 from keras.layers import add, AveragePooling3D, Activation
@@ -357,19 +344,51 @@ def build():
         return model
 model = build()
 
-# See how data changed
-# d = c.reshape(32,32,32,14)
-# np.squeeze + vstack
-
-tmp = np.load(prot_list[0])
-tmp_shp = tmp.reshape(14,32,32,32)
-tmp_squ = np.squeeze(tmp)
-
-tmp_shp.shape
-tmp_squ.shape
-
-(tmp_shp == tmp_squ).all()
-
-# see reshape vs move axis
 
 # dict to conv, (), mask ?
+
+# =============================================================================
+# Alternative method to get x.
+# =============================================================================
+# Inspired by train.py in the original deepdrug repo.
+from keras.utils import np_utils
+import os
+
+voxel_folder = str(data_dir.joinpath("deepdrug3d_voxel_data/"))
+
+atps = random.sample(nucleotide_list, 50)
+hemes = random.sample(heme_list, 50)
+controls = random.sample(control_list, 50)
+
+L = len(atps) + len(hemes) + len(controls)
+voxel = np.zeros(shape = (L, 14, 32, 32, 32),
+        dtype = np.float64)
+label = np.zeros(shape = (L,), dtype = int)
+cnt = 0
+print('...Loading the data')
+
+for filename in prot_list:
+    protein_name = filename.stem
+#    full_path = voxel_folder + '/' + filename
+    if protein_name in atps + hemes +controls:
+        temp = np.load(filename)
+        voxel[cnt,:] = temp
+    if protein_name in atps:
+        label[cnt] = 0
+    elif protein_name in hemes:
+        label[cnt] = 1
+    elif protein_name in controls:
+        label[cnt] = 2
+    else:
+#        print(protein_name)
+        continue
+    cnt += 1
+    
+y = np_utils.to_categorical(label, num_classes=3)
+model = my_model()
+model.fit(voxel, y, epochs=20, batch_size=20, validation_split=0.2)
+pred = model.predict(voxel)
+
+# =============================================================================
+# END
+# =============================================================================
